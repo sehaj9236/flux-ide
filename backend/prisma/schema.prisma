@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AutosaveStrategy {
+  DELAY
+  FOCUS_CHANGE
+  OFF
+}
+
+model User {
+  id                String             @id @default(cuid())
+  clerkId           String             @unique
+  email             String?
+  name              String?
+  imageUrl          String?
+  ownedWorkspaces   Workspace[]
+  starredWorkspaces StarredWorkspace[]
+  settings          UserSettings?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model UserSettings {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  theme         String           @default("vs-dark")
+  fontFamily    String           @default("Fira Code")
+  fontSize      Int              @default(14)
+  tabSize       Int              @default(2)
+  autosave      AutosaveStrategy @default(DELAY)
+  autosaveDelay Int              @default(1000)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Workspace {
+  id           String             @id @default(cuid())
+  title        String
+  description  String?
+  template     Template           @default(React)
+  ownerId      String
+  owner        User               @relation(fields: [ownerId], references: [id])
+  starredBy    StarredWorkspace[]
+  templateFile TemplateFile?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model TemplateFile {
+  id          String    @id @default(cuid())
+  content     Json
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model StarredWorkspace {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  isMarked    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+enum Template {
+  React
+  Next_js
+  Express
+  Vue_js
+  Hono
+  Angular
+}
