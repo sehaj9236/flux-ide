@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import { requireAuth } from '@clerk/express';
-import { getTemplateDetailsById ,deleteFile,updateFile,saveTemplate} from '../controller/templateController.js';
-
-
+import { getTemplateDetailsById, deleteFile, updateFile, saveTemplate, getGithubRepo } from '../controller/templateController.js';
 
 const templateRouter = Router();
 
-templateRouter.post("/:workspaceId",requireAuth(), getTemplateDetailsById);
+// 1. Place static routes BEFORE dynamic parameter routes
+templateRouter.post("/import", requireAuth(), getGithubRepo);
+
+// 2. Dynamic parameter routes go below
+templateRouter.post("/:workspaceId", requireAuth(), getTemplateDetailsById);
 
 // Save the entire file tree structure
-templateRouter.patch("/:workspaceId/save-all", requireAuth(), saveTemplate);
+templateRouter.patch("/:workspaceId/save", requireAuth(), saveTemplate);
 
 // Update a specific file
 templateRouter.patch("/:workspaceId/file", requireAuth(), updateFile);

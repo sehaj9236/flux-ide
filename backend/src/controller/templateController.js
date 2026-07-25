@@ -1,13 +1,16 @@
-    import prisma from "../db/prisma.js";
-    import { scanTemplateDirectory } from "../service/templateService.js";
-    import { ApiError } from "../utils/apiError.js";
-    import { ApiResponse } from "../utils/apiResponse.js";
-    import asyncHandler from "../utils/asyncHandler.js";
-    import { templatePaths } from "../utils/template.js";
-    import path from 'path';
-    import { getAuth } from '@clerk/express';
+import prisma from "../db/prisma.js";
+import { scanTemplateDirectory } from "../service/templateService.js";
+import { ApiError } from "../utils/apiError.js";
+import { ApiResponse } from "../utils/apiResponse.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import { templatePaths } from "../utils/template.js";
+import path from 'path';
+import { getAuth } from '@clerk/express';
+import fs from 'fs/promises';
 
- const sanitizeContent = (content) => typeof content === 'string' ? content.replace(/\0/g, '') : content;
+import os from 'os';
+import { execSync } from 'child_process';
+const sanitizeContent = (content) => typeof content === 'string' ? content.replace(/\0/g, '') : content;
 
 const verifyWorkspaceAccess = async (clerkId, workspaceId) => {
   const user = await prisma.user.findUnique({
@@ -179,25 +182,184 @@ export const deleteFile = asyncHandler(async (req, res) => {
 });
 
 export const saveTemplate = asyncHandler(async (req, res) => {
+
   const { workspaceId } = req.params;
   const { fullStructure } = req.body; // The entire file tree JSON object
   const auth = getAuth(req);
 
+
   // 1. Verify access and ownership
-  const workspace = await verifyWorkspaceAccess(auth.userId, workspaceId);
+  await verifyWorkspaceAccess(auth.userId, workspaceId);
 
   // 2. Validate input
   if (!fullStructure) {
     throw new ApiError(400, "Full template structure is required.");
   }
 
-  // 3. Update the entire JSON tree in the database
+  // 3. Update or Upsert the entire JSON tree in the database
+  // Using workspaceId is strictly safer because it is @unique on the TemplateFile model
   const savedTemplate = await prisma.templateFile.update({
-    where: { id: workspace.templateFile.id },
+    where: { 
+      workspaceId: workspaceId 
+    },
     data: { 
       content: fullStructure // Prisma treats this as a JSON object update
     }
   });
 
   return res.status(200).json(new ApiResponse(200, savedTemplate.content, "Full template saved successfully."));
+});
+
+// Helper function to recursively find package.json inside a directory
+async function findPackageJson(dirPath) {
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      
+      // Skip ignored folders to optimize search
+      if (entry.isDirectory()) {
+        if (['node_modules', '.git', 'dist', 'build', '.next'].includes(entry.name)) continue;
+        
+        const found = await findPackageJson(fullPath);
+        if (found) return found;
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        return fullPath;
+      }
+    }
+  } catch (err) {
+    console.error("Error searching for package.json:", err);
+  }
+  return null;
+}
+
+function sanitizeNullBytes(obj) {
+  if (typeof obj === 'string') {
+    return obj.replace(/\u0000/g, '');
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeNullBytes);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const cleaned = {};
+    for (const key of Object.keys(obj)) {
+      cleaned[key] = sanitizeNullBytes(obj[key]);
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+export const getGithubRepo = asyncHandler(async (req, res) => {
+  const { repoUrl, title, description } = req.body;
+  const auth = getAuth(req);
+
+  // 1. Verify user authentication via Clerk
+  if (!auth || !auth.userId) {
+    throw new ApiError(401, "Unauthorized request. Please log in.");
+  }
+
+  if (!repoUrl) {
+    throw new ApiError(400, "Repository URL is required.");
+  }
+
+  // 2. Extract owner and repo from URL (Safely handles trailing .git)
+  const cleanUrl = repoUrl.trim().replace(/\.git$/, '');
+  const urlMatch = cleanUrl.match(/github\.com\/([^\/]+)\/([^\/#?]+)/);
+  
+  if (!urlMatch) {
+    throw new ApiError(400, "Invalid GitHub URL format. Use format: https://github.com/owner/repo");
+  }
+
+  const repo = urlMatch[2];
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'Flux-App',
+  };
+
+  // 3. Find or ensure the user exists in Prisma using their Clerk ID
+  let user = await prisma.user.findUnique({
+    where: { clerkId: auth.userId }
+  });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: { clerkId: auth.userId }
+    });
+  }
+
+  // 4. Clone repository temporarily on the server first
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'flux-import-'));
+  
+  try {
+    execSync(`git clone --depth 1 ${repoUrl} ${tempDir}`, { stdio: 'ignore' });
+
+    // 5. Locate package.json anywhere in the repository structure
+    const packageJsonPath = await findPackageJson(tempDir);
+    
+    if (!packageJsonPath) {
+      throw new ApiError(400, "No package.json found in this repository. Only Node.js projects are supported.");
+    }
+
+    // 6. Read and parse package.json content to verify the framework
+    const pkgContentString = await fs.readFile(packageJsonPath, 'utf-8');
+    const packageJson = JSON.parse(pkgContentString);
+
+    const deps = { ...(packageJson.dependencies || {}), ...(packageJson.devDependencies || {}) };
+    const isReact = !!deps['react'];
+    const isNext = !!deps['next'];
+    const isVue = !!deps['vue'];
+    const isAngular = !!deps['@angular/core'];
+    const isExpress = !!deps['express'];
+    const isHono = !!deps['hono'];
+
+    const isSupported = isReact || isNext || isVue || isAngular || isExpress || isHono;
+    
+    if (!isSupported) {
+      throw new ApiError(400, "Unsupported framework. Please import a React, Next.js, Vue, Angular, Express, or Hono project.");
+    }
+
+    // 7. Scan local directory using your directory scanner to generate the file tree JSON object
+    const rawContentTree = await scanTemplateDirectory(tempDir);
+
+    // 🛡️ SANITIZE: Strip out unsupported PostgreSQL null bytes (\u0000) from files
+    const formattedContentTree = sanitizeNullBytes(rawContentTree);
+
+    // 8. Map framework to match your Prisma Template enum exactly
+    let templateType = 'React';
+    if (isNext) templateType = 'Next_js';
+    else if (isVue) templateType = 'Vue_js';
+    else if (isAngular) templateType = 'Angular';
+    else if (isExpress) templateType = 'Express';
+    else if (isHono) templateType = 'Hono';
+
+    // 9. Create Workspace and TemplateFile simultaneously via Prisma
+    const newWorkspace = await prisma.workspace.create({
+      data: {
+        title: title || repo,
+        description: description || `Imported from ${repoUrl}`,
+        ownerId: user.id, // Internal database user cuid
+        template: templateType,
+        templateFile: {
+          create: {
+            content: formattedContentTree // Sanitized JSON object
+          }
+        }
+      },
+      include: {
+        templateFile: true
+      }
+    });
+
+    return res.status(201).json(new ApiResponse(201, newWorkspace, "GitHub repository imported successfully."));
+
+  } catch (error) {
+    console.error("Git clone or scan error:", error);
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, "Failed to clone and process the repository.");
+  } finally {
+    // 10. Clean up temporary files from server storage
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 });

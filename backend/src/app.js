@@ -13,8 +13,8 @@ app.use(cors({
 
 // 1. PARSERS FIRST
 app.use('/api/webhooks', webhookRoutes);
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 2. AUTHENTICATION NEXT
 app.use(clerkMiddleware());
@@ -29,4 +29,4 @@ app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', times
 // 4. CATCH-ALL
 app.use((req, res) => res.status(404).json({ error: 'Endpoint resource target not found.' }));
 
-export default app;
+export default app; 
