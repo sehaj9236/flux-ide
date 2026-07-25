@@ -18,7 +18,8 @@ const Logo = () => (
 
 const MockUserButton = () => <UserButton />;
 
-const Sidebar = ({ projects = [],setAppData }) => {
+// NEW: Accept activeView and setActiveView as props
+const Sidebar = ({ projects = [], setAppData, activeView, setActiveView }) => {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const { user } = useUser();
   
@@ -64,7 +65,13 @@ const Sidebar = ({ projects = [],setAppData }) => {
 
         {/* Dashboard Nav */}
         <nav className={`flex flex-col gap-1 mt-1 w-full ${isCollapsed ? 'items-center' : ''}`}>
-            <NavItem icon={<LayoutDashboard size={18} /> } label="Dashboard" active isCollapsed={isCollapsed} />
+            <NavItem 
+              icon={<LayoutDashboard size={18} />} 
+              label="Dashboard" 
+              isCollapsed={isCollapsed} 
+              active={activeView === 'dashboard'} 
+              onClick={() => setActiveView('dashboard')}
+            />
         </nav>
 
         {/* Projects Nav */}
@@ -72,11 +79,32 @@ const Sidebar = ({ projects = [],setAppData }) => {
           <h3 className={`text-xs font-medium text-gray-500 mb-2 whitespace-nowrap overflow-hidden transition-all duration-300 ${
             isCollapsed ? 'max-h-0 opacity-0 m-0' : 'max-h-[20px] opacity-100 px-2.5 mt-2'
           }`}>Projects</h3>
-          <nav className={`flex flex-col gap-1  w-full ${isCollapsed ? 'items-center' : ''}`}>
-            <NavItem icon={<Folder size={18} />} hoverIcon={<ChevronRight size={18} />} label="All projects" isCollapsed={isCollapsed}  />
-            <NavItem icon={<Star size={18} />} hoverIcon={<ChevronRight size={18} />} label="Starred" isCollapsed={isCollapsed} />
-            <NavItem icon={<User size={18} />} hoverIcon={<ChevronRight size={18} />} label="Created by me" isCollapsed={isCollapsed} />
-            <NavItem icon={<Users size={18} />} hoverIcon={<ChevronRight size={18} />} label="Shared with me" isCollapsed={isCollapsed} />
+          <nav className={`flex flex-col gap-1 w-full ${isCollapsed ? 'items-center' : ''}`}>
+            {/* NEW: Pass onClick and active state to each NavItem */}
+            <NavItem 
+              icon={<Folder size={18} />} hoverIcon={<ChevronRight size={18} />} 
+              label="All projects" isCollapsed={isCollapsed} 
+              active={activeView === 'all'}
+              onClick={() => setActiveView('all')}
+            />
+            <NavItem 
+              icon={<Star size={18} />} hoverIcon={<ChevronRight size={18} />} 
+              label="Starred" isCollapsed={isCollapsed} 
+              active={activeView === 'starred'}
+              onClick={() => setActiveView('starred')}
+            />
+            <NavItem 
+              icon={<User size={18} />} hoverIcon={<ChevronRight size={18} />} 
+              label="Created by me" isCollapsed={isCollapsed} 
+              active={activeView === 'created'}
+              onClick={() => setActiveView('created')}
+            />
+            <NavItem 
+              icon={<Users size={18} />} hoverIcon={<ChevronRight size={18} />} 
+              label="GitHub Imports" isCollapsed={isCollapsed} 
+              active={activeView === 'shared'}
+              onClick={() => setActiveView('shared')}
+            />
           </nav>
         </div>
 
@@ -116,7 +144,8 @@ const Sidebar = ({ projects = [],setAppData }) => {
 
 // --- Reusable Sub-Components ---
 
-const NavItem = ({ icon, hoverIcon, label, active = false, isCollapsed, hasMore = false }) => {
+// NEW: Accept the 'onClick' prop
+const NavItem = ({ icon, hoverIcon, label, active = false, isCollapsed, hasMore = false, onClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -131,7 +160,11 @@ const NavItem = ({ icon, hoverIcon, label, active = false, isCollapsed, hasMore 
   return (
     <div className={`relative group ${isCollapsed ? 'flex justify-center w-full' : 'w-full'}`} ref={menuRef}>
       <button
-        onClick={(e) => e.stopPropagation()}
+        // NEW: Trigger the passed onClick function, while keeping stopPropagation
+        onClick={(e) => { 
+          e.stopPropagation(); 
+          if(onClick) onClick(); 
+        }}
         title={isCollapsed ? label : undefined}
         className={`flex items-center transition-colors w-full cursor-pointer ${isCollapsed ? 'justify-center w-10 h-10 rounded-xl' : 'gap-3 px-2.5 py-1.5 rounded-md'} ${active ? 'bg-[#252525] text-white font-medium' : 'hover:bg-white/5 text-gray-300 font-medium'}`}
       >
@@ -168,8 +201,7 @@ const NavItem = ({ icon, hoverIcon, label, active = false, isCollapsed, hasMore 
   );
 };
 
-const RecentItem = ({ label,project ,starred = false }) => {
-  
+const RecentItem = ({ label, project, starred = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStarred, setIsStarred] = useState(starred);
   const menuRef = useRef(null);
@@ -203,13 +235,10 @@ const RecentItem = ({ label,project ,starred = false }) => {
 
       {isMenuOpen && (
         <div className="absolute top-full left-[calc(100%-32px)] mt-1 w-[190px] bg-[#1a1a1a] border border-white/5 rounded-xl shadow-2xl z-50 p-1.5 flex flex-col gap-0.5">
-          
-        
           <button onClick={(e) => { e.stopPropagation(); window.location.href = `/dashboard/playground/${project.id}`; setIsMenuOpen(false); }} className="flex items-center gap-3 px-2.5 py-1.5 text-[13px] text-gray-200 hover:bg-white/10 rounded-lg transition-colors w-full text-left">
             <Eye size={16} className="text-gray-400" />
             <span className="font-medium">Open Project</span>
           </button>
-          {/* ... Add other menu buttons here ... */}
         </div>
       )}
     </div>
