@@ -20,7 +20,11 @@ import {
   FileJson,
   FileType2,
   FileImage,
-  Loader2 // <-- ADDED THIS IMPORT FOR THE LOADING SPINNER
+ 
+  Loader2,
+  Power,
+  MessageSquare,
+  Bot
 } from "lucide-react";
 
 // --- HELPER: FILE ICONS BY EXTENSION ---
@@ -234,32 +238,54 @@ export const EditorHeader = ({
   onCloseTab,
   onCloseAll,
   onToggleSidebar,
-  onSave,       // <-- ADDED THIS PROP
+  onSave,
   isSaving,
-  template     // <-- ADDED THIS PROP
+  template,
+  // --- AI PROPS ---
+  isAiEnabled = true,
+  onToggleAi
 }) => {
+  const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
+  const aiMenuRef = useRef(null);
+
+  // Close AI dropdown menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (aiMenuRef.current && !aiMenuRef.current.contains(event.target)) {
+        setIsAiMenuOpen(false);
+      }
+    };
+    if (isAiMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isAiMenuOpen]);
+
   return (
-    <div className="flex flex-col border-b border-[#2b2b2b] bg-[#0f0f10] select-none shrink-0">
+    <div className="flex flex-col border-b border-[#2b2b2b] bg-[#0f0f10] select-none shrink-0 font-sans">
       
       {/* Top Action Bar */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e1e1e]">
         <div className="flex items-center gap-3">
           <button 
             onClick={onToggleSidebar}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+            title="Toggle Sidebar"
           >
             <PanelLeft size={18} />
           </button>
           <div className="flex flex-col leading-tight">
-            <span className="text-sm font-semibold text-gray-200">{template.workspace.title} </span>
+            <span className="text-sm font-semibold text-gray-200">
+              {template?.workspace?.title || 'Project'} 
+            </span>
             <span className="text-[11px] text-gray-500 font-medium tracking-wide">
               {openFiles.length} file(s) open
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {/* --- UPDATED SAVE BUTTON --- */}
+        <div className="flex items-center gap-1.5 relative">
+          {/* Save Button */}
           <button 
             onClick={onSave}
             disabled={isSaving}
@@ -272,19 +298,69 @@ export const EditorHeader = ({
               <Save size={16} />
             )}
           </button>
-          {/* --------------------------- */}
           
-          <button className="flex items-center cursor-pointer gap-1.5 bg-[#f4f4f5] text-black px-3 py-1.5 rounded-md hover:bg-white transition-colors text-xs font-semibold shadow-sm ml-1">
-            <Sparkles size={14} className="text-black" /> AI 
-          </button>
+          {/* --- AI BUTTON & DROPDOWN --- */}
+          <div ref={aiMenuRef} className="relative ml-1">
+            <button 
+              onClick={() => setIsAiMenuOpen(!isAiMenuOpen)}
+              className={`flex items-center cursor-pointer gap-2 px-3 py-1.5 rounded-md transition-colors text-xs font-semibold shadow-sm ${
+                isAiEnabled 
+                  ? 'bg-[#f4f4f5] text-black hover:bg-white' 
+                  : 'bg-[#252526] text-gray-400 hover:text-white'
+              }`}
+            >
+              <Sparkles size={14} className={isAiEnabled ? "text-black" : "text-gray-400"} /> 
+              AI 
+              {isAiEnabled && (
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 ml-0.5 shadow-[0_0_5px_rgba(34,197,94,0.5)]" />
+              )}
+            </button>
+
+            {/* Dropdown Popup */}
+            {isAiMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-[#1a1a1a] border border-[#2b2b2b] rounded-xl shadow-2xl z-50 overflow-hidden text-gray-200 animate-in fade-in zoom-in-95 duration-100">
+                
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[#2b2b2b] bg-[#1e1e1e]">
+                  <div className="flex items-center gap-2 font-medium text-sm">
+                    <Bot size={16} className="text-gray-400" />
+                    AI Assistant
+                  </div>
+                  <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${isAiEnabled ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'}`}>
+                    {isAiEnabled ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                {/* Toggle Switch Row */}
+                <div 
+                  onClick={() => onToggleAi && onToggleAi(!isAiEnabled)}
+                  className="flex items-center justify-between px-4 py-3 hover:bg-[#252526] cursor-pointer transition-colors"
+                >
+                  <div className="flex gap-3">
+                    <Power size={16} className="text-gray-400 mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-white">{isAiEnabled ? 'Disable AI' : 'Enable AI'}</span>
+                      <span className="text-xs text-gray-500">Toggle AI assistance</span>
+                    </div>
+                  </div>
+                  
+                  <div className={`w-8 h-4.5 flex items-center rounded-full p-0.5 transition-colors ${isAiEnabled ? 'bg-white' : 'bg-gray-600'}`}>
+                    <div className={`bg-[#1a1a1a] w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${isAiEnabled ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
           
+          {/* Settings Button */}
           <button className="p-1.5 text-gray-400 cursor-pointer hover:text-white hover:bg-[#252526] rounded transition-colors ml-1" title="Settings">
             <Settings size={16} />
           </button>
         </div>
       </div>
 
-      {/* Bottom Tabs List */}
+      {/* Bottom Open Tabs Bar */}
       <div className="flex items-center justify-between px-2 py-1.5 bg-[#121212]">
         <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-1">
           {openFiles.map((file, idx) => {
@@ -299,7 +375,7 @@ export const EditorHeader = ({
                     : 'bg-transparent text-gray-500 border-transparent hover:bg-[#1e1e1e] hover:text-gray-300'
                 }`}
               >
-                <FileIcon name={file.name} size={14} isActive={isActive} />
+                <FileIcon size={14} className={isActive ? 'text-gray-300' : 'text-gray-500'} />
                 <span className="truncate pb-[1px]">{file.name}</span>
                 
                 <button
@@ -322,7 +398,7 @@ export const EditorHeader = ({
         {openFiles.length > 0 && (
           <button
             onClick={onCloseAll}
-            className="text-[11px] font-medium text-gray-500 hover:text-gray-300 whitespace-nowrap px-3 transition-colors"
+            className="text-[11px] font-medium text-gray-500 hover:text-gray-300 whitespace-nowrap px-3 transition-colors cursor-pointer"
           >
             Close All
           </button>

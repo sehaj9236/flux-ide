@@ -118,6 +118,11 @@ export const configureMonaco = (monaco) => {
       "editorWarning.foreground": "#D29922",
       "editorInfo.foreground": "#75BEFF",
       "editorHint.foreground": "#EEEEEE",
+      
+      // --- AI Ghost Text Colors ---
+      "editorGhostText.foreground": "#6E7681",
+      "editorGhostText.background": "#00000000",
+      
       "editorSuggestWidget.background": "#161B22",
       "editorSuggestWidget.border": "#30363D",
       "editorSuggestWidget.foreground": "#E6EDF3",
@@ -137,7 +142,7 @@ export const configureMonaco = (monaco) => {
 
   monaco.editor.setTheme("modern-dark");
   
-  // --- THE FIX: Ignore specific strict external module, React, & Node errors ---
+  // --- Ignore specific strict external module, React, & Node errors ---
   monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
     noSemanticValidation: false,
     noSyntaxValidation: false,
@@ -195,7 +200,7 @@ export const configureMonaco = (monaco) => {
     typeRoots: ["node_modules/@types"],
   });
 
-  // --- THE FIX: Ignore Tailwind CSS @ directives ---
+  // --- Ignore Tailwind CSS @ directives ---
   monaco.languages.css.cssDefaults.setDiagnosticsOptions({
     lint: {
       unknownAtRules: 'ignore'
@@ -254,10 +259,18 @@ export const defaultEditorOptions = {
   find: { addExtraSpaceOnTop: false, autoFindInSelection: "never", seedSearchStringFromSelection: "always" },
   hover: { enabled: true, delay: 300, sticky: true },
   
-  // THE MAGIC FIX: Turning off semantic highlighting prevents the TS Server from stripping our colors
+  // Turning off semantic highlighting prevents the TS Server from stripping our colors
   "semanticHighlighting.enabled": false,
   
-  stickyScroll: { enabled: true }
+  stickyScroll: { enabled: true },
+
+  // --- Global Inline AI Configuration ---
+  inlineSuggest: { 
+    enabled: true,
+    showToolbar: 'never', // Ensures the clunky hover widget never appears
+    suppressSuggestions: true 
+  },
+  suggest: { preview: true },
 };
 
 // --- DYNAMIC KEYWORD HIGHLIGHTING ---
@@ -289,6 +302,15 @@ export const setupKeywordHighlighting = (editor, monaco) => {
         border-radius: 4px;
         padding: 0 4px;
         border: 1px solid #2F81F766;
+      }
+      
+      /* --- Force AI Ghost Text to be Italicized --- */
+      .monaco-editor .ghost-text-decoration {
+        font-style: italic !important;
+        opacity: 0.8 !important;
+      }
+      .monaco-editor .ghost-text-decoration-preview {
+        font-style: italic !important;
       }
     `;
     document.head.appendChild(style);

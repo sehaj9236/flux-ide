@@ -4,6 +4,8 @@ import {clerkMiddleware} from "@clerk/express"
 import webhookRoutes from './route/webhook.js';
 import workspaceRouter from './route/workSpace.js';
 import templateRouter from './route/template.js';
+import aiRouter from './route/ai.js';
+
 const app = express();
 
 app.use(cors({
@@ -22,7 +24,8 @@ app.use(clerkMiddleware());
 // 3. ROUTES LAST
 
 app.use('/api/workspace', workspaceRouter);
-app.use('/api/template',templateRouter)
+app.use('/api/template',templateRouter);
+app.use('/api/ai',aiRouter);
 // System Status
 app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
 
